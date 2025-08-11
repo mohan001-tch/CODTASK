@@ -1,0 +1,47 @@
+#include <iostream>
+#include <fstream> // For file handling
+#include <string>
+using namespace std;
+
+int main() {
+    string filename = "example.txt";
+    string data;
+
+    // 1. Write to the file
+    ofstream outFile(filename); // Creates/overwrites file
+    if (!outFile) {
+        cerr << "Error creating file!" << endl;
+        return 1;
+    }
+    cout << "Enter text to write to the file: ";
+    getline(cin, data);
+    outFile << data << endl;
+    outFile.close();
+    cout << "Data written successfully.\n";
+
+    // 2. Append to the file
+    ofstream appendFile(filename, ios::app); // ios::app = append mode
+    if (!appendFile) {
+        cerr << "Error opening file for appending!" << endl;
+        return 1;
+    }
+    cout << "Enter text to append to the file: ";
+    getline(cin, data);
+    appendFile << data << endl;
+    appendFile.close();
+    cout << "Data appended successfully.\n";
+
+    // 3. Read from the file
+    ifstream inFile(filename);
+    if (!inFile) {
+        cerr << "Error opening file for reading!" << endl;
+        return 1;
+    }
+    cout << "\n--- File Content ---\n";
+    while (getline(inFile, data)) {
+        cout << data << endl;
+    }
+    inFile.close();
+
+    return 0;
+}

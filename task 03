@@ -1,0 +1,181 @@
+code-->
+
+// task3.cpp
+// Simple Snake game using SFML (C++17)
+// Controls: Arrow keys / WASD, P pause, R restart, Esc quit
+
+#include <SFML/Graphics.hpp>
+#include <deque>
+#include <random>
+#include <string>
+#include <algorithm>
+
+struct Cell { int x, y; };
+enum class Dir { Up, Down, Left, Right };
+
+static inline bool opposite(Dir a, Dir b){
+    return (a==Dir::Up && b==Dir::Down) || (a==Dir::Down && b==Dir::Up) ||
+           (a==Dir::Left && b==Dir::Right) || (a==Dir::Right && b==Dir::Left);
+}
+
+class SnakeGame {
+public:
+    SnakeGame(int gridW = 32, int gridH = 24, int cellPx = 20)
+        : W(gridW), H(gridH), CELL(cellPx), rng(std::random_device{}()) {
+        reset();
+    }
+
+    void reset() {
+        snake.clear();
+        int sx = W/2, sy = H/2;
+        snake.push_back({sx, sy});
+        snake.push_back({sx-1, sy});
+        snake.push_back({sx-2, sy});
+        dir = Dir::Right;
+        pendingDir = dir;
+        grow = 0;
+        score = 0;
+        paused = false;
+        gameOver = false;
+        stepTime = baseStepTime;
+        placeFood();
+    }
+
+    void handleEvent(const sf::Event &e) {
+        if (e.type != sf::Event::KeyPressed) return;
+        if (e.key.code == sf::Keyboard::P) togglePause();
+        if (e.key.code == sf::Keyboard::R) reset();
+        if (gameOver) return;
+        Dir nd = pendingDir;
+        if (e.key.code == sf::Keyboard::Up || e.key.code == sf::Keyboard::W) nd = Dir::Up;
+        if (e.key.code == sf::Keyboard::Down || e.key.code == sf::Keyboard::S) nd = Dir::Down;
+        if (e.key.code == sf::Keyboard::Left || e.key.code == sf::Keyboard::A) nd = Dir::Left;
+        if (e.key.code == sf::Keyboard::Right || e.key.code == sf::Keyboard::D) nd = Dir::Right;
+        if (!opposite(dir, nd)) pendingDir = nd;
+    }
+
+    void update(float dt) {
+        if (paused || gameOver) return;
+        timer += dt;
+        if (timer >= stepTime) {
+            timer -= stepTime;
+            step();
+        }
+    }
+
+    void draw(sf::RenderWindow &win) {
+        win.clear(sf::Color(18,18,18));
+        // draw food
+        sf::RectangleShape r;
+        r.setSize({float(CELL-2), float(CELL-2)});
+        r.setPosition(food.x*CELL + 1, food.y*CELL + 1);
+        r.setFillColor(sf::Color(220,70,70));
+        win.draw(r);
+        // draw snake
+        for (size_t i=0;i<snake.size();++i){
+            sf::RectangleShape s;
+            s.setSize({float(CELL-2), float(CELL-2)});
+            s.setPosition(snake[i].x*CELL + 1, snake[i].y*CELL + 1);
+            if (i==0) s.setFillColor(sf::Color(80,200,120)); else s.setFillColor(sf::Color(60,160,200));
+            win.draw(s);
+        }
+        // overlay if paused or gameover
+        if (paused || gameOver) {
+            sf::RectangleShape overlay;
+            overlay.setSize({float(W*CELL), float(H*CELL)});
+            overlay.setFillColor(sf::Color(0,0,0,120));
+            win.draw(overlay);
+        }
+    }
+
+    bool isGameOver() const { return gameOver; }
+    int getScore() const { return score; }
+    void togglePause() { if (!gameOver) paused = !paused; }
+
+private:
+    const int W, H, CELL;
+    std::deque<Cell> snake;
+    Cell food{0,0};
+    Dir dir{Dir::Right}, pendingDir{Dir::Right};
+    int grow = 0;
+    int score = 0;
+    bool paused = false, gameOver = false;
+    std::mt19937 rng;
+
+    float timer = 0.f;
+    float stepTime = 0.12f;
+    const float baseStepTime = 0.12f;
+
+    void step() {
+        dir = pendingDir;
+        Cell head = snake.front();
+        switch(dir) {
+            case Dir::Up: head.y -= 1; break;
+            case Dir::Down: head.y += 1; break;
+            case Dir::Left: head.x -= 1; break;
+            case Dir::Right: head.x += 1; break;
+        }
+        // wrap-around
+        head.x = (head.x + W) % W;
+        head.y = (head.y + H) % H;
+        // self-collision
+        for (const auto &c : snake) if (c.x==head.x && c.y==head.y) { gameOver = true; return; }
+        snake.push_front(head);
+        if (head.x == food.x && head.y == food.y) {
+            score += 10;
+            grow += 2;
+            stepTime = std::max(0.05f, stepTime - 0.004f);
+            placeFood();
+        }
+        if (grow > 0) --grow; else snake.pop_back();
+    }
+
+    void placeFood() {
+        std::uniform_int_distribution<int> dx(0, W-1), dy(0, H-1);
+        while (true) {
+            Cell f{dx(rng), dy(rng)};
+            bool clash=false;
+            for (auto &c: snake) if (c.x==f.x && c.y==f.y) { clash=true; break; }
+            if (!clash) { food=f; return; }
+        }
+    }
+};
+
+int main(){
+    const int GRID_W = 32, GRID_H = 24, CELL = 20;
+    sf::RenderWindow window(sf::VideoMode(GRID_W*CELL, GRID_H*CELL), "Snake - Task 3");
+    window.setFramerateLimit(60);
+
+    SnakeGame game(GRID_W, GRID_H, CELL);
+    sf::Clock clock;
+
+    while (window.isOpen()){
+        sf::Event e;
+        while (window.pollEvent(e)){
+            if (e.type == sf::Event::Closed) window.close();
+            if (e.type == sf::Event::KeyPressed && e.key.code == sf::Keyboard::Escape) window.close();
+            game.handleEvent(e);
+        }
+
+        float dt = clock.restart().asSeconds();
+        game.update(dt);
+
+        window.setTitle("Snake - Task 3  |  Score: " + std::to_string(game.getScore()) + (game.isGameOver() ? "  [GAME OVER - Press R]" : ""));
+        game.draw(window);
+        window.display();
+    }
+    return 0;
+}
+
+
+CMakeslist.txt--->
+
+cmake_minimum_required(VERSION 3.10)
+project(task3)
+
+set(CMAKE_CXX_STANDARD 17)
+
+find_package(SFML 2.5 COMPONENTS graphics window system REQUIRED)
+
+add_executable(task3 task3.cpp)
+target_link_libraries(task3 sfml-graphics sfml-window sfml-system)
